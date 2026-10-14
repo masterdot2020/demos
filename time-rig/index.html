@@ -1,0 +1,790 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Time Displacement Rig</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: one-screen instrument. Dark viewfinder stage on the left, control rail on the right; stacks on phones. */
+:root{
+  --bg:#e1e2de;
+  --panel:#ecedea;
+  --ink:#161819;
+  --muted:#59605d;
+  --line:#c2c5c0;
+  --accent:#c8106a;
+  --on-accent:#ffffff;
+  --stage:#141616;
+  --stage-ink:#c9cdca;
+  --stage-dim:#6f7572;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --body:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101211; --panel:#181b1a; --ink:#e5e8e4; --muted:#8a918d; --line:#2b2f2d;
+    --accent:#ff4d9b; --on-accent:#16070e; --stage:#080909; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101211; --panel:#181b1a; --ink:#e5e8e4; --muted:#8a918d; --line:#2b2f2d;
+  --accent:#ff4d9b; --on-accent:#16070e; --stage:#080909; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45}
+.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;padding-inline:16px;padding-block:14px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:8px 24px;flex-wrap:wrap}
+h1{margin:0;font-family:var(--display);font-variation-settings:"wdth" 125;font-weight:850;font-size:clamp(20px,2.3vw,28px);line-height:1;letter-spacing:-.01em;text-transform:uppercase;text-wrap:balance}
+.tagline{margin:6px 0 0;color:var(--muted);font-size:13px}
+.readout{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.readout b{color:var(--ink);font-weight:500}
+
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;min-height:0}
+.stage{position:relative;background:var(--stage);border-radius:3px;min-height:0;display:grid;place-items:center;padding:16px;overflow:hidden}
+.stage.drag{outline:2px dashed var(--accent);outline-offset:-8px}
+.rig{position:relative;display:flex;flex-direction:column;gap:10px}
+canvas{display:block;background:#000;width:432px;height:540px;max-width:100%}
+.hud{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;padding:10px 12px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#f1f3f1;text-shadow:0 1px 2px rgba(0,0,0,.7);pointer-events:none}
+.hud .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#7dff9e;margin-right:6px;vertical-align:1px}
+.hud.paused .dot{background:#f1f3f1}
+.hud.rec .dot{background:#ff3b5c;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.2}}
+.ruler{display:grid;gap:4px}
+.ramp{height:8px;background:linear-gradient(90deg,#000,#fff);border:1px solid #2a2d2c}
+.ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--stage-ink);font-variant-numeric:tabular-nums}
+.ticks span:first-child{color:var(--stage-dim)}
+.ruler-label{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--stage-dim)}
+.nogl{color:var(--stage-ink);max-width:36ch;text-align:center}
+
+.panel{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:20px;padding:2px 4px 24px 2px}
+section{display:flex;flex-direction:column;gap:10px}
+h2{margin:0;font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px}
+h2::after{content:"";flex:1;height:1px;background:var(--line)}
+.hint{margin:0;color:var(--muted);font-size:12.5px;max-width:60ch}
+
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.presets button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px;padding:9px 10px;border:1px solid var(--line);background:var(--panel);border-radius:2px}
+.presets button b{font-family:var(--display);font-variation-settings:"wdth" 112;font-weight:700;font-size:13px}
+.presets button small{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.presets button:hover{border-color:var(--ink)}
+.presets button[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.presets button:focus-visible,.seg button:focus-visible,.btn:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.seg{display:flex;border:1px solid var(--line);border-radius:2px;overflow:hidden;background:var(--panel)}
+.seg button{all:unset;cursor:pointer;flex:1;text-align:center;padding:7px 4px;font-size:12.5px;font-weight:500;color:var(--ink);border-left:1px solid var(--line);white-space:nowrap}
+.seg button:first-child{border-left:0}
+.seg button[aria-checked="true"]{background:var(--ink);color:var(--bg)}
+.seg button:disabled{color:var(--muted);cursor:not-allowed;opacity:.6}
+
+.ctl{display:grid;gap:2px}
+.ctl label{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;font-weight:500}
+.ctl output{font-family:var(--mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ctl.off{opacity:.4}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;margin:0;--p:50%}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:linear-gradient(90deg,var(--accent) var(--p),var(--line) var(--p))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:16px;margin-top:-7px;background:var(--ink);border-radius:1px;border:0}
+input[type=range]::-moz-range-track{height:2px;background:var(--line)}
+input[type=range]::-moz-range-progress{height:2px;background:var(--accent)}
+input[type=range]::-moz-range-thumb{width:11px;height:16px;background:var(--ink);border-radius:1px;border:0}
+input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+.switch{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:500;cursor:pointer}
+.switch input{appearance:none;-webkit-appearance:none;width:34px;height:18px;border-radius:9px;background:var(--line);position:relative;cursor:pointer;margin:0}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--panel);transition:transform .15s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{transform:translateX(16px)}
+.switch input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.btn{all:unset;cursor:pointer;padding:8px 12px;border:1px solid var(--ink);border-radius:2px;font-size:12.5px;font-weight:600;text-align:center}
+.btn:hover{background:var(--ink);color:var(--bg)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.primary:hover{filter:brightness(1.08);background:var(--accent);color:var(--on-accent)}
+.btn[aria-disabled="true"]{opacity:.45;pointer-events:none}
+.grow{flex:1}
+
+details.recipe{border-top:1px solid var(--line);padding-top:12px}
+details.recipe summary{cursor:pointer;font-weight:600;font-size:13px}
+details.recipe h3{margin:14px 0 6px;font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+details.recipe ol{margin:0;padding-left:18px;display:grid;gap:6px;font-size:12.5px;max-width:60ch}
+details.recipe p{margin:0;font-size:12.5px;max-width:60ch}
+kbd,code{font-family:var(--mono);font-size:11.5px}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:2px;font-size:13px;max-width:calc(100% - 32px);z-index:5}
+
+@media (max-width:899px){
+  .app{height:auto}
+  main{grid-template-columns:minmax(0,1fr)}
+  .stage{padding:10px}
+  .panel{overflow:visible}
+}
+@media (prefers-reduced-motion:reduce){ .hud.rec .dot{animation:none} .switch input::after{transition:none} }
+</style>
+
+<div class="app">
+  <header>
+    <div>
+      <h1>Time Displacement Rig</h1>
+      <p class="tagline">Every pixel reads from a different moment. The delay map decides which.</p>
+    </div>
+    <div class="readout" id="readout">buffer <b>72 f</b> · <b>1.20 s</b> @ 60 fps · <b>1080×1350</b></div>
+  </header>
+
+  <main>
+    <div class="stage" id="stage">
+      <div class="rig" id="rig">
+        <canvas id="view" width="1080" height="1350" aria-label="Time displacement output"></canvas>
+        <div class="hud" id="hud"><span><span class="dot"></span><span id="hudState">Live</span></span><span id="hudView">Output</span></div>
+        <div class="ruler" aria-hidden="true">
+          <div class="ramp" id="ramp"></div>
+          <div class="ticks"><span>now</span><span id="tMid">−0.60 s</span><span id="tEnd">−1.20 s</span></div>
+          <div class="ruler-label">Delay map key · black reads the live frame, white the oldest</div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="panel" aria-label="Controls">
+      <section>
+        <h2>Looks</h2>
+        <div class="presets" id="presets">
+          <button type="button" data-p="monolith" aria-pressed="true"><b>Monolith</b><small>slab · terrazzo</small></button>
+          <button type="button" data-p="contours" aria-pressed="false"><b>Contours</b><small>rings · 16 bands</small></button>
+          <button type="button" data-p="posterOrb" aria-pressed="false"><b>Poster orb</b><small>orb · posters</small></button>
+          <button type="button" data-p="radial" aria-pressed="false"><b>Radial</b><small>orb · extrude</small></button>
+          <button type="button" data-p="octagon" aria-pressed="false"><b>Octagon</b><small>tunnel · 22 bands</small></button>
+          <button type="button" data-p="shutter" aria-pressed="false"><b>Rolling shutter</b><small>slit-scan</small></button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Source footage</h2>
+        <div class="seg" role="radiogroup" aria-label="Source" id="srcSeg">
+          <button type="button" role="radio" data-v="terrazzo">Terrazzo</button>
+          <button type="button" role="radio" data-v="posters">Posters</button>
+          <button type="button" role="radio" data-v="media" disabled>Your clip</button>
+        </div>
+        <div class="row">
+          <button type="button" class="btn grow" id="loadBtn">Load clip or photo…</button>
+          <input type="file" id="file" accept="video/*,image/*" hidden>
+        </div>
+        <p class="hint">Slow handheld footage of concrete, gravel or torn posters works best. You can also drop a file onto the picture. A photo gets a virtual camera drift.</p>
+        <div class="ctl" id="ctl-camSpeed"><label for="camSpeed">Camera drift<output id="o-camSpeed"></output></label><input type="range" id="camSpeed" min="0" max="3" step="0.05"></div>
+      </section>
+
+      <section>
+        <h2>Delay map</h2>
+        <div class="seg" role="radiogroup" aria-label="Shape" id="shapeSeg">
+          <button type="button" role="radio" data-v="0">Slab</button>
+          <button type="button" role="radio" data-v="1">Rings</button>
+          <button type="button" role="radio" data-v="2">Orb</button>
+          <button type="button" role="radio" data-v="3">Tunnel</button>
+          <button type="button" role="radio" data-v="4">Slit</button>
+        </div>
+        <div class="seg" role="radiogroup" aria-label="Sampling" id="sampSeg">
+          <button type="button" role="radio" data-v="0">Displace</button>
+          <button type="button" role="radio" data-v="1">Extrude</button>
+        </div>
+        <p class="hint" id="sampHint"></p>
+        <div class="ctl" id="ctl-size"><label for="size">Shape size<output id="o-size"></output></label><input type="range" id="size" min="0.4" max="1.6" step="0.01"></div>
+        <div class="ctl" id="ctl-motion"><label for="motion">Shape motion<output id="o-motion"></output></label><input type="range" id="motion" min="0" max="3" step="0.05"></div>
+      </section>
+
+      <section>
+        <h2>Time</h2>
+        <div class="ctl" id="ctl-depth"><label for="depth">Depth<output id="o-depth"></output></label><input type="range" id="depth" min="8" max="72" step="1"></div>
+        <div class="ctl" id="ctl-bands"><label for="bands">Bands<output id="o-bands"></output></label><input type="range" id="bands" min="0" max="32" step="1"></div>
+        <div class="ctl" id="ctl-chroma"><label for="chroma">Chroma split<output id="o-chroma"></output></label><input type="range" id="chroma" min="0" max="1" step="0.01"></div>
+        <div class="ctl" id="ctl-streak"><label for="streak">Background streak<output id="o-streak"></output></label><input type="range" id="streak" min="0" max="1" step="0.01"></div>
+        <label class="switch" for="mono">Mono, fringes only<input type="checkbox" id="mono" role="switch"></label>
+      </section>
+
+      <section>
+        <h2>Output</h2>
+        <div class="seg" role="radiogroup" aria-label="View" id="viewSeg">
+          <button type="button" role="radio" data-v="0">Output</button>
+          <button type="button" role="radio" data-v="1">Delay map</button>
+        </div>
+        <div class="row">
+          <button type="button" class="btn" id="pauseBtn">Pause</button>
+          <button type="button" class="btn" id="stillBtn">Save still</button>
+          <button type="button" class="btn primary grow" id="recBtn">Record 6 s</button>
+        </div>
+        <p class="hint" id="exportHint">Exports at 1080×1350, Instagram portrait. Space bar pauses.</p>
+      </section>
+
+      <details class="recipe">
+        <summary>Same effect in After Effects or TouchDesigner</summary>
+        <h3>After Effects</h3>
+        <ol>
+          <li>Footage layer: slow handheld macro of a surface.</li>
+          <li>Map precomp, switched off: a white shape on black. Rounded rectangle plus Fast Box Blur for rings, Gradient Ramp for slit-scan, a 3D layer's depth pass for the slab. Add Effect › Stylize › Posterize (Level 12–20) for hard bands.</li>
+          <li>On the footage: Effect › Time › Time Displacement. Map layer = the precomp, Max Displacement Time 1.2 s, Time Resolution 60, Stretch Map to Fit.</li>
+          <li>Fringes: duplicate twice, nudge Max Displacement Time 1–2 frames on each copy, keep one colour per copy with Shift Channels, set the copies to Add.</li>
+          <li>Streaks: on a duplicate, mask a 1 px row and scale it up on Y.</li>
+        </ol>
+        <h3>TouchDesigner</h3>
+        <p>Cache the last 72 frames into a Texture 3D TOP and drive a Time Machine TOP with a blurred Rectangle, Circle or Ramp TOP as the time map.</p>
+      </details>
+    </aside>
+  </main>
+</div>
+<div class="toast" id="toast" hidden></div>
+<video id="vid" muted loop playsinline hidden></video>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const canvas = $('view'), stage = $('stage'), rig = $('rig');
+
+/* ---------- state ---------- */
+const S = { source:'terrazzo', shape:0, sampling:1, depth:72, bands:0, chroma:0.12, mono:true, streak:0.65, size:1, motion:1, camSpeed:0.6, view:0, paused:false };
+const PRESETS = {
+  monolith:  { source:'terrazzo', shape:0, sampling:1, depth:72, bands:0,  chroma:0.12, mono:true,  streak:0.65, size:1.0,  motion:1.0, camSpeed:0.6 },
+  contours:  { source:'terrazzo', shape:1, sampling:1, depth:64, bands:16, chroma:0.08, mono:true,  streak:0,    size:1.0,  motion:0.6, camSpeed:0.7 },
+  posterOrb: { source:'posters',  shape:2, sampling:0, depth:56, bands:0,  chroma:0.15, mono:false, streak:0,    size:1.15, motion:0.8, camSpeed:0.5 },
+  radial:    { source:'terrazzo', shape:2, sampling:1, depth:72, bands:0,  chroma:0.1,  mono:true,  streak:0,    size:0.75, motion:0.7, camSpeed:0.7 },
+  octagon:   { source:'terrazzo', shape:3, sampling:1, depth:72, bands:22, chroma:0.08, mono:true,  streak:0,    size:1.0,  motion:0.6, camSpeed:0.6 },
+  shutter:   { source:'posters',  shape:4, sampling:0, depth:72, bands:0,  chroma:0.08, mono:false, streak:0,    size:1.0,  motion:0.5, camSpeed:1.2 }
+};
+
+function fail(msg, err){
+  if (err) console.error(err);
+  rig.innerHTML = '<p class="nogl"></p>'; rig.querySelector('.nogl').textContent = msg + ' Try a current Chrome or Safari on a laptop.';
+}
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); fail('The graphics card ran out of memory and stopped the effect. Reload the page to restart it.'); });
+
+/* ---------- GL setup ---------- */
+const gl = canvas.getContext('webgl2', { antialias:false, alpha:false, preserveDrawingBuffer:true });
+if (!gl) {
+  rig.innerHTML = '<p class="nogl">This browser has no WebGL2, which the frame buffer needs. Open the page in a current Chrome, Safari or Firefox.</p>';
+  return;
+}
+const small = Math.min(screen.width, screen.height) < 700;
+const OUT_W = small ? 720 : 1080, OUT_H = small ? 900 : 1350;
+canvas.width = OUT_W; canvas.height = OUT_H;
+const W = small ? 360 : 540, H = small ? 450 : 675;
+
+const VS = `#version 300 es
+const vec2 P[3] = vec2[3](vec2(-1.,-1.), vec2(3.,-1.), vec2(-1.,3.));
+out vec2 vUv;
+void main(){ vec2 p = P[gl_VertexID]; vUv = p*0.5+0.5; gl_Position = vec4(p,0.,1.); }`;
+
+const NOISE = `
+uvec2 pcg(uvec2 v){
+  v = v*1664525u + 1013904223u;
+  v.x += v.y*1664525u; v.y += v.x*1664525u;
+  v = v ^ (v>>16u);
+  v.x += v.y*1664525u; v.y += v.x*1664525u;
+  v = v ^ (v>>16u);
+  return v;
+}
+vec2 h2(vec2 p){ uvec2 q = uvec2(ivec2(floor(p)) + 65536); return vec2(pcg(q) & 0xffffffu) / 16777215.0; }
+float h1(vec2 p){ return h2(p).x; }
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.-2.*f);
+  return mix(mix(h1(i), h1(i+vec2(1,0)), u.x), mix(h1(i+vec2(0,1)), h1(i+vec2(1,1)), u.x), u.y);
+}
+float fbm(vec2 p){ float s = 0., a = .5; for(int i=0;i<5;i++){ s += a*vnoise(p); p = mat2(1.6,1.2,-1.2,1.6)*p; a *= .5; } return s; }
+mat2 R2(float a){ float c = cos(a), s = sin(a); return mat2(c,-s,s,c); }
+`;
+
+const FS_SRC = `#version 300 es
+precision highp float; precision highp int;
+uniform int uSrc; uniform float uT; uniform sampler2D uTex; uniform float uTexAspect; uniform float uAspect;
+in vec2 vUv; out vec4 o;
+${NOISE}
+vec3 voro(vec2 x){
+  vec2 n = floor(x), f = fract(x); float d1 = 8., d2 = 8.; vec2 id = vec2(0.);
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+    vec2 g = vec2(float(i), float(j)); vec2 r = g + h2(n+g) - f; float d = dot(r,r);
+    if(d < d1){ d2 = d1; d1 = d; id = n+g; } else if(d < d2){ d2 = d; }
+  }
+  return vec3(sqrt(d2)-sqrt(d1), h1(id + vec2(17.,5.)), sqrt(d1));
+}
+vec3 terrazzo(vec2 q){
+  float m = fbm(q*0.9);
+  vec3 col = vec3(0.5 + (m-0.5)*0.4);
+  float g = vnoise(q*70.)*0.6 + vnoise(q*160.)*0.4;
+  col += (g-0.5)*0.26;
+  vec2 w = q*3.0 + (vec2(vnoise(q*8.), vnoise(q*8.+4.))-0.5)*0.4;
+  vec3 v = voro(w);
+  float stone = smoothstep(0.09, 0.15, v.x);
+  if(v.y < 0.58){
+    float k = fract(v.y*7.13);
+    vec3 sc = k < 0.42 ? vec3(0.10 + 0.3*k) : k < 0.8 ? vec3(0.62 + 0.4*(k-0.42)) : k < 0.9 ? vec3(0.56,0.43,0.34) : vec3(0.40,0.47,0.43);
+    sc *= 0.82 + 0.34*vnoise(w*6.);
+    col = mix(col, sc, stone);
+  }
+  vec3 v2 = voro(q*8.5 + 13.);
+  float chip = smoothstep(0.11, 0.17, v2.x) * step(v2.y, 0.5);
+  col = mix(col, vec3(0.12 + 0.85*fract(v2.y*13.7)), chip*0.9);
+  col *= 1. - 0.55*smoothstep(0.78, 0.86, vnoise(q*38.));
+  float c = abs(fbm(q*1.7 + 3.) - 0.5);
+  col *= 1. - 0.45*smoothstep(0.012, 0.0, c);
+  return clamp(col, 0., 1.);
+}
+vec3 pal(float k){
+  k = fract(k)*8.;
+  if(k<1.) return vec3(0.95,0.18,0.47);
+  if(k<2.) return vec3(0.98,0.84,0.12);
+  if(k<3.) return vec3(0.08,0.66,0.86);
+  if(k<4.) return vec3(0.07,0.07,0.08);
+  if(k<5.) return vec3(0.94,0.93,0.90);
+  if(k<6.) return vec3(0.86,0.17,0.12);
+  if(k<7.) return vec3(0.62,0.90,0.25);
+  return vec3(0.16,0.24,0.78);
+}
+vec3 posters(vec2 q){
+  vec3 col = vec3(0.86,0.85,0.8) * (0.88 + 0.16*vnoise(q*30.));
+  for(int L=0; L<4; L++){
+    float fl = float(L);
+    vec2 qq = R2(fl*1.1 + 0.3) * (q*(1.7 + fl*0.9)) + fl*7.3;
+    vec2 id = floor(qq), f = fract(qq);
+    vec2 r = h2(id + fl*31.);
+    vec2 c = 0.5 + (r-0.5)*0.25;
+    vec2 hs = 0.28 + 0.2*h2(id + 77. + fl);
+    float tear = (vnoise(qq*14.) - 0.5)*0.08;
+    vec2 dd = abs(f-c) - hs - tear;
+    if(max(dd.x, dd.y) < 0. && r.x < 0.72){
+      vec3 pc = pal(r.y*3.7 + fl*0.37), ic = pal(r.y*5.3 + 0.5);
+      float kind = fract(r.x*9.1);
+      vec2 lf = (f-c)/hs;
+      float pat = 0.;
+      if(kind < 0.3) pat = step(0.45, fract(lf.y*6.)) * step(0.25, vnoise(vec2(lf.x*10., floor(lf.y*6.))));
+      else if(kind < 0.6){ vec2 g = fract(lf*12.) - 0.5; pat = step(length(g), 0.22 + 0.2*lf.y); }
+      else if(kind < 0.82) pat = step(0.5, h1(floor(lf*vec2(3.,2.) + 3.) + r*9.));
+      col = mix(pc, ic, pat) * (0.9 + 0.14*vnoise(qq*25.));
+    }
+  }
+  return col;
+}
+vec2 cam(vec2 p, float t, float amp){
+  float a = 0.5*sin(t*0.13) + 0.3*sin(t*0.29 + 1.3);
+  float z = 1.0 + 0.2*sin(t*0.21);
+  vec2 pos = amp*vec2(sin(t*0.071), sin(t*0.053 + 0.7));
+  pos += 0.012*(vec2(vnoise(vec2(t*2.1, 3.)), vnoise(vec2(7., t*2.1))) - 0.5);
+  return R2(a)*(p*z) + pos;
+}
+void main(){
+  vec2 p = (vUv - 0.5)*vec2(uAspect, 1.);
+  vec3 col;
+  if(uSrc == 3){
+    vec2 uv = vUv; float r = uTexAspect/uAspect;
+    if(r > 1.) uv.x = (uv.x - 0.5)/r + 0.5; else uv.y = (uv.y - 0.5)*r + 0.5;
+    col = texture(uTex, uv).rgb;
+  } else if(uSrc == 2){
+    vec2 q = cam(p*0.7, uT, 0.22);
+    col = texture(uTex, vec2(q.x/uTexAspect, q.y) + 0.5).rgb;
+  } else {
+    vec2 q = cam(p, uT, 6.0);
+    col = uSrc == 0 ? terrazzo(q) : posters(q);
+  }
+  o = vec4(col, 1.);
+}`;
+
+const FS_OUT = `#version 300 es
+precision highp float; precision highp int; precision highp sampler2DArray;
+uniform sampler2DArray uBuf;
+uniform float uHead, uN, uSpan, uT, uBands, uChroma, uMono, uStreak, uSize, uAspect;
+uniform int uShape, uSampling, uView;
+in vec2 vUv; out vec4 o;
+mat2 R2(float a){ float c = cos(a), s = sin(a); return mat2(c,-s,s,c); }
+float sdBox(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q,0.)) + min(max(q.x,q.y),0.) - r; }
+vec3 tap(vec2 uv, float d){
+  float fd = clamp(d,0.,1.)*(uSpan-1.);
+  float i0 = floor(fd), f = fd - i0, i1 = min(i0 + 1., uSpan - 1.);
+  float l0 = mod(uHead - i0 + uN, uN), l1 = mod(uHead - i1 + uN, uN);
+  return mix(texture(uBuf, vec3(uv, l0)).rgb, texture(uBuf, vec3(uv, l1)).rgb, f);
+}
+void main(){
+  vec2 p = (vUv - 0.5)*vec2(uAspect, 1.);
+  float T = uT;
+  bool ex = uSampling == 1;
+  float d = 0., bg = 0., shade = 1.;
+  vec2 uvS = vUv;
+
+  if(uShape == 0){
+    // Slab: a video cube. Front face = live frame, sides = the edge pixels' history.
+    vec3 a = vec3(0.22 + 0.22*sin(T*0.23), 0.6 + 0.5*sin(T*0.31), 0.12*sin(T*0.17));
+    mat3 rx = mat3(1.,0.,0., 0.,cos(a.x),sin(a.x), 0.,-sin(a.x),cos(a.x));
+    mat3 ry = mat3(cos(a.y),0.,-sin(a.y), 0.,1.,0., sin(a.y),0.,cos(a.y));
+    mat3 rz = mat3(cos(a.z),sin(a.z),0., -sin(a.z),cos(a.z),0., 0.,0.,1.);
+    mat3 Rm = rz*ry*rx, Ri = transpose(Rm);
+    vec3 bs = uSize*vec3(0.24, 0.30, 0.20);
+    vec3 ro = Ri*vec3(0.,0.,-3.2), rd = Ri*normalize(vec3(p, 2.4));
+    vec3 m = 1./rd, n = m*ro, k = abs(m)*bs;
+    vec3 t1 = -n - k, t2 = -n + k;
+    float tN = max(max(t1.x,t1.y),t1.z), tF = min(min(t2.x,t2.y),t2.z);
+    if(tN < tF && tF > 0.){
+      vec3 P = ro + rd*tN;
+      vec3 nl = -sign(rd)*step(t1.yzx, t1.xyz)*step(t1.zxy, t1.xyz);
+      d = clamp((P.z + bs.z)/(2.*bs.z), 0., 1.);
+      if(ex) uvS = clamp(P.xy/bs.xy*0.5 + 0.5, 0.001, 0.999);
+      vec3 nw = Rm*nl;
+      shade = 0.55 + 0.5*max(dot(nw, normalize(vec3(-0.35,0.55,-0.75))), 0.);
+    } else { bg = 1.; d = mix(0.35, 1., vUv.x); }
+  } else if(uShape == 1){
+    // Rings: rounded rectangle, delay grows with distance outside it.
+    vec2 c = vec2(0.05*sin(T*0.21), 0.04*sin(T*0.29 + 1.));
+    vec2 q = R2(0.4*sin(T*0.17))*(p - c);
+    vec2 hb = uSize*vec2(0.17, 0.21);
+    float sd = sdBox(q, hb, 0.035*uSize), fall = 0.42;
+    if(sd <= 0.){ if(ex) uvS = q/hb*0.5 + 0.5; }
+    else {
+      d = clamp(sd/fall, 0., 1.);
+      if(ex) uvS = clamp(q, -hb, hb)/hb*0.5 + 0.5; else bg = step(1., sd/fall);
+      shade = 1. - 0.22*d;
+    }
+  } else if(uShape == 2){
+    // Orb: sphere lens, rim older than centre.
+    vec2 c = vec2(0.06*sin(T*0.23), 0.05*cos(T*0.19));
+    float Rr = 0.27*uSize, rim = 0.35, fall = 0.45;
+    vec2 q = p - c; float r = length(q);
+    if(r < Rr){
+      vec2 nxy = q/Rr; float nz = sqrt(max(1. - dot(nxy,nxy), 0.));
+      d = (1. - nz)*rim;
+      uvS = ex ? 0.5 + 0.45*(R2(T*0.2)*nxy) : vUv - nxy*(1. - nz)*0.07;
+      vec3 N = vec3(nxy, nz);
+      shade = 0.72 + 0.32*nz + 0.4*pow(max(dot(N, normalize(vec3(-0.4,0.5,0.75))), 0.), 28.);
+    } else {
+      d = rim + (1. - rim)*clamp((r - Rr)/fall, 0., 1.);
+      if(ex) uvS = 0.5 + 0.45*(R2(T*0.2)*(q/r)); else bg = step(fall, r - Rr);
+      shade = 1. - 0.2*d;
+    }
+  } else if(uShape == 3){
+    // Tunnel: octagonal corridor into the past, rings get denser with depth.
+    vec2 c = vec2(0.05*sin(T*0.27), 0.05*cos(T*0.21));
+    vec2 q = R2(T*0.08)*(p - c);
+    float r = length(q), a = atan(q.y, q.x);
+    const float NS = 8.; float seg = 6.2831853/NS;
+    float rp = r*cos(mod(a, seg) - seg*0.5)/cos(seg*0.5);
+    float rOut = 0.6, rEnd = 0.07*uSize;
+    if(rp > rEnd){
+      d = clamp((rOut/rp - 1.)/(rOut/rEnd - 1.), 0., 1.);
+      if(ex) uvS = 0.5 + 0.45*q/max(rp, 1e-4);
+      shade = mix(1., 0.45, pow(d, 0.6));
+    } else { d = 1.; uvS = ex ? 0.5 + 0.45*q/rEnd : vUv; shade = 0.45; }
+  } else {
+    // Slit: rolling shutter, each row a little later.
+    float ang = 0.5*sin(T*0.2);
+    d = clamp(dot(vUv - 0.5, vec2(sin(ang), cos(ang))) + 0.5, 0., 1.);
+  }
+
+  if(uBands > 1.5) d = min(floor(d*uBands)/(uBands - 1.), 1.);
+  if(bg > 0.5 && uStreak > 0.) uvS.y = mix(uvS.y, 0.5 + 0.3*sin(T*0.11), uStreak);
+
+  if(uView == 1){ o = vec4(vec3(d), 1.); return; }
+
+  float off = uChroma*6./max(uSpan - 1., 1.) * step(0.001, d);
+  vec3 a0 = tap(uvS, d), a1 = tap(uvS, d + off), a2 = tap(uvS, d + 2.*off);
+  vec3 lw = vec3(0.299, 0.587, 0.114);
+  vec3 col = mix(vec3(a0.r, a1.g, a2.b), vec3(dot(a0,lw), dot(a1,lw), dot(a2,lw)), uMono);
+  o = vec4(col*shade, 1.);
+}`;
+
+function compile(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function program(fs){
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, VS)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+const uniforms = (p, names) => Object.fromEntries(names.map(n => [n, gl.getUniformLocation(p, n)]));
+let pSrc, pOut;
+try { pSrc = program(FS_SRC); pOut = program(FS_OUT); }
+catch (err) { fail('The graphics code did not start on this device.', err); return; }
+const uS = uniforms(pSrc, ['uSrc','uT','uTex','uTexAspect','uAspect']);
+const uO = uniforms(pOut, ['uBuf','uHead','uN','uSpan','uT','uBands','uChroma','uMono','uStreak','uSize','uAspect','uShape','uSampling','uView']);
+gl.bindVertexArray(gl.createVertexArray());
+
+// Ring buffer of past frames: one 2D texture array, one layer per frame.
+let N = 0, buf = null;
+while (gl.getError() !== gl.NO_ERROR) {}
+for (const n of [72, 48, 32, 24]) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D_ARRAY, t);
+  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, W, H, n);
+  if (gl.getError() === gl.NO_ERROR) { buf = t; N = n; break; }
+  gl.deleteTexture(t);
+}
+gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+if (!buf) { fail('This device does not have enough graphics memory for the frame buffer.'); return; }
+const fbo = gl.createFramebuffer();
+
+const srcTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, srcTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([128,128,128,255]));
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+let head = 0, srcTime = 0, shapeTime = 0, acc = 0, last = performance.now();
+let media = null, texAspect = 1; // media: 'image' | 'video'
+const video = $('vid');
+
+const srcCode = () => S.source === 'terrazzo' ? 0 : S.source === 'posters' ? 1 : media === 'image' ? 2 : 3;
+
+function drawSource(layer, t){
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, buf, 0, layer);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(pSrc);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, srcTex);
+  gl.uniform1i(uS.uTex, 1); gl.uniform1i(uS.uSrc, srcCode());
+  gl.uniform1f(uS.uT, t); gl.uniform1f(uS.uAspect, W/H); gl.uniform1f(uS.uTexAspect, texAspect);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+function uploadVideo(){
+  if (video.readyState < 2) return;
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, srcTex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+}
+// Fill the whole buffer so the effect has history from the first frame.
+function preroll(){
+  if (srcCode() === 3) uploadVideo();
+  for (let i = N - 1; i >= 0; i--) { head = (head + 1) % N; drawSource(head, srcTime - i*S.camSpeed/60); }
+}
+function drawOut(){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, OUT_W, OUT_H);
+  gl.useProgram(pOut);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY, buf);
+  gl.uniform1i(uO.uBuf, 0);
+  gl.uniform1f(uO.uHead, head); gl.uniform1f(uO.uN, N); gl.uniform1f(uO.uSpan, Math.min(S.depth, N));
+  gl.uniform1f(uO.uT, shapeTime); gl.uniform1f(uO.uBands, S.bands); gl.uniform1f(uO.uChroma, S.chroma);
+  gl.uniform1f(uO.uMono, S.mono ? 1 : 0); gl.uniform1f(uO.uStreak, S.streak); gl.uniform1f(uO.uSize, S.size);
+  gl.uniform1f(uO.uAspect, W/H); gl.uniform1i(uO.uShape, S.shape); gl.uniform1i(uO.uSampling, S.sampling); gl.uniform1i(uO.uView, S.view);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+function tick(now){
+  requestAnimationFrame(tick);
+  const dt = Math.min((now - last)/1000, 0.1); last = now;
+  if (!S.paused) {
+    shapeTime += dt*S.motion;
+    acc += dt;
+    if (srcCode() === 3 && acc >= 1/60) uploadVideo();
+    let steps = 0;
+    while (acc >= 1/60 && steps < 2) {
+      acc -= 1/60; steps++;
+      srcTime += S.camSpeed/60;
+      head = (head + 1) % N;
+      drawSource(head, srcTime);
+    }
+    if (acc > 1/30) acc = 0;
+  }
+  drawOut();
+  if (rec) $('hudState').textContent = 'Rec ' + ((now - recStart)/1000).toFixed(1) + ' s';
+}
+
+/* ---------- layout ---------- */
+const narrowMQ = matchMedia('(max-width: 899px)');
+function fit(){
+  const ruler = rig.querySelector('.ruler');
+  let w, h;
+  if (narrowMQ.matches) { w = stage.clientWidth - 20; h = w*1.25; }
+  else {
+    const availW = stage.clientWidth - 32, availH = stage.clientHeight - 32 - ruler.offsetHeight - 10;
+    h = Math.max(200, Math.min(availH, availW*1.25)); w = h*0.8;
+  }
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px'; rig.style.width = w + 'px';
+}
+new ResizeObserver(fit).observe(stage);
+narrowMQ.addEventListener('change', fit);
+
+/* ---------- UI ---------- */
+const fmt = {
+  camSpeed: v => v === 0 ? 'still' : v.toFixed(2) + '×',
+  size: v => v.toFixed(2) + '×',
+  motion: v => v === 0 ? 'frozen' : v.toFixed(2) + '×',
+  depth: v => `${v} f · ${((v - 1)/60).toFixed(2)} s`,
+  bands: v => v < 2 ? 'smooth' : `${v} steps`,
+  chroma: v => v === 0 ? 'off' : `${(v*6).toFixed(1)} f per channel`,
+  streak: v => v === 0 ? 'off' : Math.round(v*100) + '%'
+};
+const sliders = Object.keys(fmt);
+$('depth').max = N;
+
+function paintRange(el){ const p = (el.value - el.min)/(el.max - el.min)*100; el.style.setProperty('--p', p + '%'); }
+function setSeg(id, val){
+  for (const b of $(id).querySelectorAll('button')) b.setAttribute('aria-checked', String(b.dataset.v === String(val)));
+}
+const HINTS = [
+  'Displace: each pixel stays where it is and reads an older frame.',
+  'Extrude: the frame is mapped onto the shape and its edge pixels are pulled back through time, like the sides of a video cube.'
+];
+function syncUI(){
+  for (const k of sliders) { const el = $(k); el.value = S[k]; paintRange(el); $('o-' + k).value = fmt[k](+S[k]); }
+  $('mono').checked = S.mono;
+  setSeg('srcSeg', S.source); setSeg('shapeSeg', S.shape); setSeg('sampSeg', S.sampling); setSeg('viewSeg', S.view);
+  $('sampHint').textContent = HINTS[S.sampling];
+  const streakLive = S.shape === 0 || ((S.shape === 1 || S.shape === 2) && S.sampling === 0);
+  $('ctl-streak').classList.toggle('off', !streakLive); $('streak').disabled = !streakLive;
+  const driftLive = S.source !== 'media' || media === 'image';
+  $('ctl-camSpeed').classList.toggle('off', !driftLive); $('camSpeed').disabled = !driftLive;
+  $('ctl-size').classList.toggle('off', S.shape === 4); $('size').disabled = S.shape === 4;
+  $('hudView').textContent = S.view ? 'Delay map' : 'Output';
+  const span = Math.min(S.depth, N) - 1;
+  $('tMid').textContent = '−' + (span/120).toFixed(2) + ' s';
+  $('tEnd').textContent = '−' + (span/60).toFixed(2) + ' s';
+  $('readout').innerHTML = `buffer <b>${N} f</b> · <b>${((N - 1)/60).toFixed(2)} s</b> @ 60 fps · <b>${OUT_W}×${OUT_H}</b>`;
+  if (S.bands > 1) {
+    const n = S.bands, stops = [];
+    for (let i = 0; i < n; i++) { const g = Math.round(i/(n - 1)*255); stops.push(`rgb(${g},${g},${g}) ${i/n*100}% ${(i + 1)/n*100}%`); }
+    $('ramp').style.background = `linear-gradient(90deg,${stops.join(',')})`;
+  } else $('ramp').style.background = 'linear-gradient(90deg,#000,#fff)';
+}
+function clearPreset(){ for (const b of $('presets').querySelectorAll('button')) b.setAttribute('aria-pressed', 'false'); }
+
+for (const k of sliders) $(k).addEventListener('input', e => { S[k] = +e.target.value; clearPreset(); syncUI(); });
+$('mono').addEventListener('change', e => { S.mono = e.target.checked; clearPreset(); syncUI(); });
+
+function bindSeg(id, key, numeric, after){
+  $(id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || b.disabled) return;
+    const v = numeric ? +b.dataset.v : b.dataset.v;
+    if (S[key] === v) return;
+    S[key] = v; if (key !== 'view') clearPreset(); syncUI(); after && after();
+  });
+}
+bindSeg('shapeSeg', 'shape', true);
+bindSeg('sampSeg', 'sampling', true);
+bindSeg('viewSeg', 'view', true);
+bindSeg('srcSeg', 'source', false, () => { if (S.source === 'media' && media === 'video') video.play().catch(() => {}); else video.pause(); preroll(); });
+
+$('presets').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const p = { ...PRESETS[b.dataset.p] };
+  if (S.source === 'media') delete p.source;
+  const srcChanged = p.source && p.source !== S.source;
+  Object.assign(S, p, { depth: Math.min(p.depth, N) });
+  for (const x of $('presets').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+  syncUI(); if (srcChanged) preroll();
+});
+
+/* ---------- media input ---------- */
+const toastEl = $('toast'); let toastTimer;
+function toast(msg){ toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.hidden = true, 3600); }
+
+function useMedia(kind){
+  media = kind; S.source = 'media';
+  $('srcSeg').querySelector('[data-v="media"]').disabled = false;
+  syncUI(); preroll();
+}
+function loadFile(file){
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  if (file.type.startsWith('image/')) {
+    const img = new Image();
+    img.onload = () => {
+      video.pause();
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, srcTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      texAspect = img.naturalWidth/img.naturalHeight;
+      useMedia('image'); toast('Photo loaded. Camera drift moves across it.');
+    };
+    img.onerror = () => toast("That image couldn't be read. Try a JPG or PNG.");
+    img.src = url;
+  } else if (file.type.startsWith('video/') || /\.(mov|mp4|m4v|webm)$/i.test(file.name)) {
+    video.onloadeddata = () => {
+      texAspect = video.videoWidth/video.videoHeight;
+      video.play().catch(() => {});
+      useMedia('video'); toast('Clip loaded. The buffer fills as it plays.');
+    };
+    video.onerror = () => toast("This clip won't decode in this browser. Export it as H.264 MP4 and load it again.");
+    video.src = url; video.load();
+  } else toast('Load a video or an image file.');
+}
+$('loadBtn').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value = ''; });
+stage.addEventListener('dragover', e => { e.preventDefault(); stage.classList.add('drag'); });
+stage.addEventListener('dragleave', () => stage.classList.remove('drag'));
+stage.addEventListener('drop', e => { e.preventDefault(); stage.classList.remove('drag'); loadFile(e.dataTransfer.files[0]); });
+
+/* ---------- transport + export ---------- */
+function setPaused(p){
+  S.paused = p;
+  $('pauseBtn').textContent = p ? 'Play' : 'Pause';
+  $('hud').classList.toggle('paused', p);
+  if (!rec) $('hudState').textContent = p ? 'Paused' : 'Live';
+  if (S.source === 'media' && media === 'video') p ? video.pause() : video.play().catch(() => {});
+}
+$('pauseBtn').addEventListener('click', () => setPaused(!S.paused));
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && (e.target === document.body || e.target === canvas)) { e.preventDefault(); setPaused(!S.paused); }
+});
+
+// Saving: inside claude.ai the page asks the viewer through the downloads capability; opened as a plain file it uses a normal link.
+let saver = null;
+async function getSaver(){
+  if (saver !== null) return saver;
+  if (!window.claude) return (saver = 'link');
+  try { saver = await window.claude.use('downloads'); } catch { saver = null; }
+  if (!saver) saver = false;
+  return saver;
+}
+async function offer(filename, blob){
+  const s = await getSaver();
+  if (s === 'link') {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000); toast('Saved ' + filename); return;
+  }
+  if (!s) { toast('Saving files is not available in this view.'); return; }
+  try { await s.save({ filename, data: blob }); toast('Saved ' + filename); }
+  catch (err) {
+    const code = err && err.code;
+    toast(code === 'declined' ? 'Save cancelled.' : code === 'rate_limited' ? 'A save prompt is already open.' : code === 'too_large' ? 'The file is too large to save here.' : 'Saving is not available in this view.');
+  }
+}
+const stamp = () => new Date().toISOString().slice(0,19).replace(/[-:T]/g, '');
+$('stillBtn').addEventListener('click', () => {
+  drawOut();
+  canvas.toBlob(b => b ? offer(`time-displacement-${stamp()}.png`, b) : toast("The frame couldn't be captured."), 'image/png');
+});
+
+let rec = null, recStart = 0;
+const recMime = window.MediaRecorder ? ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m)) : null;
+if (!recMime || !canvas.captureStream) { $('recBtn').setAttribute('aria-disabled', 'true'); $('recBtn').title = 'This browser cannot record a canvas.'; }
+$('recBtn').addEventListener('click', () => {
+  if (rec || !recMime) return;
+  if (S.paused) setPaused(false);
+  const chunks = [];
+  rec = new MediaRecorder(canvas.captureStream(60), { mimeType: recMime, videoBitsPerSecond: 16e6 });
+  rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  rec.onstop = () => {
+    rec = null; $('hud').classList.remove('rec'); $('hudState').textContent = S.paused ? 'Paused' : 'Live';
+    $('recBtn').removeAttribute('aria-disabled'); $('recBtn').textContent = 'Record 6 s';
+    offer(`time-displacement-${stamp()}.${recMime.includes('mp4') ? 'mp4' : 'webm'}`, new Blob(chunks, { type: recMime.split(';')[0] }));
+  };
+  rec.start(250); recStart = performance.now();
+  $('hud').classList.add('rec'); $('recBtn').setAttribute('aria-disabled', 'true'); $('recBtn').textContent = 'Recording…';
+  setTimeout(() => rec && rec.stop(), 6000);
+});
+getSaver().then(s => {
+  if (!s) { for (const id of ['stillBtn', 'recBtn']) $(id).setAttribute('aria-disabled', 'true'); $('exportHint').textContent = 'Saving files is not available in this view.'; }
+});
+
+/* ---------- boot ---------- */
+syncUI(); fit(); preroll();
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) setPaused(true);
+requestAnimationFrame(t => { last = t; tick(t); });
+})();
+</script>
+
+
+</body></html>
